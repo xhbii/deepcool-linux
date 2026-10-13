@@ -2,7 +2,7 @@
 
 0.2.0 将原厂 G2 HID 命令与独立 Linux 温度策略连接到后台服务、CLI 和中文面板。
 遥测数显已有实机确认；新增风扇、RPM、屏幕开关和告警目前有原厂静态证据及自动测试，
-尚待用户更新服务后确认本机效果。
+硬件效果仍需验证。
 
 ## 模式和策略
 
@@ -30,7 +30,7 @@
 
 所有命令使用普通 HID output write，报告 ID `0x10`；不是 feature ioctl。
 格式为 `10 + payload + sum(payload)&ff + 16`，随后填零至 64 字节。
-本机实际 descriptor 的 input/output ID `0x10` 均为 63 字节数据加 1 字节 ID。
+AK620 G2 的 HID descriptor 中，input/output ID `0x10` 均为 63 字节数据加 1 字节 ID。
 相邻写入至少间隔 100 ms，保留原厂的发送节奏。
 
 | 用途 | 校验前 payload（hex） | 参数 |

@@ -8,7 +8,7 @@ license=('GPL-3.0-or-later')
 depends=('python')
 optdepends=('tk: Chinese desktop control panel')
 source=("$pkgname-$pkgver.tar.gz")
-sha256sums=('b3c8a82e4f89a86f2da400c126efc86a718d3f863b08ff06bc237dacdbb6d76f')
+sha256sums=('1d4d4cf14a1e986f6b551f52eb73122ecf7eed280711812959cd1498983dfc17')
 
 check() {
     cd "$srcdir/$pkgname-$pkgver"

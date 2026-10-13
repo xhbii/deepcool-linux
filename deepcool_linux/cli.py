@@ -38,6 +38,14 @@ def main(argv=None):
     setting.add_argument("--unit", choices=("C", "F"))
     setting.add_argument("--interval", type=float)
     setting.add_argument("--enabled", choices=("true", "false"))
+    setting.add_argument("--screen-enabled", choices=("true", "false"))
+    setting.add_argument("--temperature-alert", choices=("true", "false", "unchanged"))
+    setting.add_argument("--fan-mode", choices=("unchanged", "motherboard", "manual",
+                                               "quiet", "balanced", "performance", "curve"))
+    setting.add_argument("--fan-pwm", type=int, help="手动 PWM，20–100%%")
+    setting.add_argument("--fan-curve", type=json.loads, help='JSON 曲线，例如 [[30,30],[60,60],[80,100]]')
+    setting.add_argument("--fan-acceleration", type=int, help="0–4，4 为立即加速")
+    setting.add_argument("--fan-deceleration", type=int, help="0–4")
     gui = sub.add_parser("gui", help="打开中文桌面控制界面")
     gui.add_argument("--socket", type=Path, default=config.SOCKET)
     authorize = sub.add_parser("authorize-user", help="指定可修改设置的桌面用户（仅 root）")
@@ -75,11 +83,12 @@ def main(argv=None):
             result = request(socket_path=args.socket)
         elif args.command == "set":
             values = {k: getattr(args, k) for k in config.SETTINGS if getattr(args, k) is not None}
-            if "enabled" in values:
-                values["enabled"] = values["enabled"] == "true"
+            for key in ("enabled", "screen_enabled", "temperature_alert"):
+                if key in values:
+                    values[key] = None if values[key] == "unchanged" else values[key] == "true"
             config.validate(values, partial=True)
             if not values:
-                parser.error("Specify --unit, --interval or --enabled")
+                parser.error("请指定至少一个设置；可用选项见 set --help")
             result = request("settings", values, args.socket)
         elif args.command == "authorize-user":
             if os.geteuid() != 0:

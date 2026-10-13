@@ -1,34 +1,95 @@
-# AK620 G2 fan controls: implementation status
+# AK620 G2 风扇控制
 
-The Windows 1.2.14 application's AK620 G2 interface exposes these operations:
+0.2.0 将原厂 G2 HID 命令与独立 Linux 温度策略连接到后台服务、CLI 和中文面板。
+遥测数显已有实机确认；新增风扇、RPM、屏幕开关和告警目前有原厂静态证据及自动测试，
+尚待用户更新服务后确认本机效果。
 
-- Motherboard PWM synchronization.
-- Silent AI / performance AI and sleep / office / gaming / overclocking presets.
-- Manual PWM, acceleration and deceleration settings.
-- RPM feedback.
-- Display power and temperature alert settings.
+## 模式和策略
 
-The frontend's IPC parameters are not the device's HID packet layout. The main
-implementation is stored as V8 serialized bytecode. Protocol investigation is
-in progress; commands are enabled only after the report ID, field layout,
-transport method and response interpretation are established.
+| 模式 | 行为 |
+|---|---|
+| unchanged | 启动时保持设备现有设置；从本程序的软件模式切换过来时恢复主板控制 |
+| motherboard | 发送主板 PWM 同步命令，不设置软件占空比 |
+| manual | 20–100% 手动占空比，保留软件温度保护 |
+| quiet / balanced / performance | 本项目定义的三个温度曲线，线性插值 |
+| curve | 用户提供 2–16 个 [摄氏温度, PWM百分比] 点，温度严格递增，PWM 单调不减 |
 
-The current released implementation sends telemetry reports only and leaves
-fan configuration unchanged. Firmware updates and zero-RPM control are outside
-the implemented scope.
+默认保持现有设置。软件控制先写入非零目标，再关闭主板同步。
+温度 ≥80°C 或传感器缺失/非法时请求 100% PWM，并取消硬件加速延迟。
+升温立即增加目标；正常降温每秒最多降低 5 个百分点。
+这些预设不是原厂 AI 算法，不提供停转或固件升级。
 
-The Linux policy layer has tests for manual duty, configurable monotonic
-temperature curves, three Linux presets, immediate increases and gradual
-decreases. Software control uses full duty at 80°C or when the temperature
-sensor is unavailable. These presets are newly designed curves, not the
-vendor's AI algorithm. This layer is not connected to the device until the
-control packets are verified.
+`fan_acceleration`、`fan_deceleration` 为 0–4 等级，4 对应设备平滑参数 0，
+0 对应参数 40。软件还单独限制正常降速，避免温度波动造成频繁转速变化。
+软件温度控制不受屏幕刷新间隔、暂停发送和屏幕关闭影响。
 
-HID transport supports bounded nonblocking input reads and feature reports
-whose lengths match the connected model's descriptor (IDs 2, 3 and 4: 64 bytes;
-ID 5: 2 bytes, each including its ID). Transport support alone does not
-establish the semantics of those reports.
+服务正常退出时请求恢复主板同步。尚未建立独立硬件看门狗证据，
+进程被强制杀死、系统崩溃或 USB 断连时无法保证恢复；PWM 命令写入也没有确认应答。
 
-Investigation files derived from the vendor application are kept locally and
-are excluded from version control and release archives. Verified protocol
-summaries and independently written implementations can be included here.
+## 原厂控制帧
+
+所有命令使用普通 HID output write，报告 ID `0x10`；不是 feature ioctl。
+格式为 `10 + payload + sum(payload)&ff + 16`，随后填零至 64 字节。
+本机实际 descriptor 的 input/output ID `0x10` 均为 63 字节数据加 1 字节 ID。
+相邻写入至少间隔 100 ms，保留原厂的发送节奏。
+
+| 用途 | 校验前 payload（hex） | 参数 |
+|---|---|---|
+| 主板同步 | 68 01 11 02 02 V | 1 主板、0 软件 |
+| PWM | 68 01 11 02 03 V | 百分比；本程序只允许 20–100 |
+| 加速平滑 | 68 01 11 02 04 V | (4−等级)×10 |
+| 减速平滑 | 68 01 11 02 05 V | 同上 |
+| 温度告警 | 68 01 11 02 06 V | 0 关、1 开 |
+| RPM 查询 | 68 01 11 01 08 | 无参数 |
+
+完整例子（未含尾部零）：
+
+```text
+主板同步：10 68 01 11 02 02 01 7f 16
+软件同步：10 68 01 11 02 02 00 7e 16
+PWM 100： 10 68 01 11 02 03 64 e3 16
+RPM 查询：10 68 01 11 01 08 83 16
+```
+
+RPM 输入为 64 字节编号报告，检查 ID `0x10` 和 byte 5 的 selector `7`，
+将 bytes 6–9 解释为无符号大端 32 位 RPM，拒绝超过 10000 的数值。
+这是原厂回调使用的字段位置；编号 HID 输入保留 ID 的规则见
+[Linux hidraw 文档](https://docs.kernel.org/hid/hidraw.html)。
+完整输入头和输入校验和尚未实机确认，不推断未观察的校验规则。
+每轮输入最多读取 16 个报告，状态保留最近 4 帧 hex 供诊断。
+第一轮非阻塞读取可能尚无响应，后续轮次读取已排队的反馈；超过 5 秒无更新则 RPM 为空。
+
+## 屏幕及告警
+
+G2 屏幕命令与遥测布局相同，但头部为 `10 68 01 11 0c 01 V`：
+V=0 关闭、1 明确开启；原厂自动遥测为 V=2。
+后续功耗、单位、温度、负载、频率和校验字段见 [遥测文档](protocol.md)。
+原厂显式开关屏固定使用摄氏；本程序编码时尊重当前选择的单位。
+关屏后停止普通遥测，否则可能被重新点亮。
+既有社区遥测头 `10 68 01 08 ...` 已实机工作，因此继续保留。
+
+温度告警设置为 true/false 时发送开关命令；null 表示保持当前告警状态，
+不会撤销之前已经发送的状态。告警阈值、视觉效果由设备决定，暂不提供自定义阈值。
+
+## 证据与可复核位置
+
+依据 DeepCool 1.2.14 的 `out/main/index.jsc` 离线指令与常量池，
+SHA-256：`67f4e893bf90c895ac34e82541381365186ca24856e8e228ff016b7cdb999091`。
+V8 缓存版本为 11.0.226.20，解析 profile 根据
+[对应版本官方 V8 源码](https://github.com/v8/v8/tree/11.0.226.20) 生成，
+使用 [v8asm](https://github.com/aynakeya/v8asm) 离线解析，没有运行原厂代码。
+
+| 函数 | 原 JSC 字节码偏移（十进制） |
+|---|---:|
+| generateCheckDigit | 214606 |
+| RPM 数据回调 | 597017 |
+| sendTempAlert | 610771 |
+| DisplayClose | 611695 |
+| setPwmSwitch | 616781 |
+| setPwm | 617641 |
+| sendPwmDeceleration | 618504 |
+| sendPwmAcceleration | 619379 |
+
+原厂档位、AI/手动模式选择属于主机算法，最终使用同一 PWM 命令。
+原厂 getAllConfig 读取本地 LevelDB 状态，不是硬件 ACK。
+厂家安装包、字节码和完整反编译材料只保留本地，不提交到 GitHub 或源码包。

@@ -5,8 +5,14 @@ import math
 import os
 from pathlib import Path
 
-DEFAULTS = {"unit": "C", "interval": 1.0, "enabled": True, "controller_uid": 0}
-SETTINGS = {"unit", "interval", "enabled"}
+from .fan_policy import PRESETS, validate_curve
+
+DEFAULTS = {"unit": "C", "interval": 1.0, "enabled": True, "controller_uid": 0,
+            "fan_mode": "unchanged", "fan_pwm": 60,
+            "fan_curve": [list(p) for p in PRESETS["balanced"]],
+            "fan_acceleration": 4, "fan_deceleration": 2,
+            "screen_enabled": True, "temperature_alert": None}
+SETTINGS = set(DEFAULTS) - {"controller_uid"}
 CONFIG = Path("/var/lib/deepcool-linux/config.json")
 SOCKET = Path("/run/deepcool-linux/control.sock")
 
@@ -29,6 +35,20 @@ def validate(values: dict, partial=False) -> dict:
         uid = result["controller_uid"]
         if type(uid) is not int or not 0 <= uid <= 2**31 - 1:
             raise ValueError("controller_uid must be a valid Linux UID")
+    if "fan_mode" in result and result["fan_mode"] not in (
+            "unchanged", "motherboard", "manual", "quiet", "balanced", "performance", "curve"):
+        raise ValueError("未知风扇控制模式")
+    for name, low, high in (("fan_pwm", 20, 100), ("fan_acceleration", 0, 4),
+                            ("fan_deceleration", 0, 4)):
+        if name in result and (type(result[name]) is not int or not low <= result[name] <= high):
+            raise ValueError(f"{name} 应为 {low}–{high} 的整数")
+    if "fan_curve" in result:
+        result["fan_curve"] = [list(p) for p in validate_curve(result["fan_curve"])]
+    if "screen_enabled" in result and type(result["screen_enabled"]) is not bool:
+        raise ValueError("screen_enabled must be boolean")
+    if ("temperature_alert" in result and result["temperature_alert"] is not None
+            and type(result["temperature_alert"]) is not bool):
+        raise ValueError("temperature_alert must be boolean or null")
     return result
 
 
@@ -38,7 +58,7 @@ def load(path: Path = CONFIG) -> dict:
             raise ValueError("Config file exceeds 8 KiB")
         return validate(json.loads(path.read_text()))
     except FileNotFoundError:
-        return DEFAULTS.copy()
+        return validate({})
 
 
 def save(values: dict, path: Path = CONFIG):

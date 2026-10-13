@@ -8,7 +8,7 @@
 /usr/bin/python3 tools/build-release.py
 cd packaging/arch
 makepkg -s
-sudo pacman -U deepcool-ak620g2-linux-0.1.0-1-any.pkg.tar.zst
+sudo pacman -U deepcool-ak620g2-linux-0.2.0-1-any.pkg.tar.zst
 sudo pacman -S --needed tk
 sudo deepcool-linux authorize-user "$USER"
 sudo systemctl enable --now deepcool-linux.service

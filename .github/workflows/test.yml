@@ -1,0 +1,22 @@
+name: Tests
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Compile modules and check installer syntax
+        run: |
+          python -m compileall -q deepcool_linux launcher.py service-launcher.py service-launcher-cli.py
+          bash -n install-system.sh
+      - name: Build source archive
+        run: python tools/build-release.py

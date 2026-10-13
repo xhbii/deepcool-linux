@@ -1,0 +1,21 @@
+# Local vendor artifacts and machine-specific investigation records.
+/analysis/
+/research/
+
+# Generated source/binary packages and makepkg work directories.
+/dist/
+/packaging/arch/src/
+/packaging/arch/pkg/
+*.tar.gz
+*.pkg.tar.*
+*.log
+
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+*.exe
+*.dll
+*.node
+*.asar
+*.jsc

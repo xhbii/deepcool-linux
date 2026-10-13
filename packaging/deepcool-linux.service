@@ -1,0 +1,28 @@
+[Unit]
+Description=DeepCool AK620 G2 digital display controller
+After=systemd-udevd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -I /usr/lib/deepcool-linux/service-launcher.py
+Restart=on-failure
+RestartSec=3
+RuntimeDirectory=deepcool-linux
+RuntimeDirectoryMode=0755
+StateDirectory=deepcool-linux
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=yes
+RestrictRealtime=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=DeepCool AK620 G2
+Name[zh_CN]=DeepCool AK620 G2 数显控制
+Comment=Linux controller for the DeepCool AK620 G2 digital display
+Exec=deepcool-linux gui
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;

@@ -26,7 +26,7 @@ fi
 echo "安装目录：/usr/lib/deepcool-linux；桌面控制用户：$desktop_user ($desktop_uid)"
 echo '安装 root 系统服务以读取 RAPL 和访问 USB HID；控制界面以普通用户运行。'
 install -d -m 0755 /usr/lib/deepcool-linux/deepcool_linux
-for module in __init__ __main__ cli config daemon gui hardware protocol sensors; do
+for module in __init__ __main__ cli config daemon fan_policy gui hardware protocol sensors; do
     install -m 0644 "$project_dir/deepcool_linux/$module.py" "/usr/lib/deepcool-linux/deepcool_linux/$module.py"
 done
 install -m 0644 "$project_dir/launcher.py" /usr/lib/deepcool-linux/launcher.py

@@ -2,6 +2,7 @@
 """Build a source archive from an explicit list; exclude all proprietary artifacts."""
 
 import hashlib
+import gzip
 from pathlib import Path
 import shutil
 import tarfile
@@ -18,9 +19,16 @@ files.extend(str(p.relative_to(ROOT)) for p in sorted((ROOT / "deepcool_linux").
 files.extend(str(p.relative_to(ROOT)) for p in sorted((ROOT / "tests").glob("*.py")))
 target = ROOT / "dist" / f"{NAME}-{VERSION}.tar.gz"
 target.parent.mkdir(exist_ok=True)
-with tarfile.open(target, "w:gz") as archive:
-    for relative in files:
-        archive.add(ROOT / relative, arcname=f"{NAME}-{VERSION}/{relative}")
+with target.open("wb") as raw:
+    with gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as compressed:
+        with tarfile.open(fileobj=compressed, mode="w") as archive:
+            for relative in files:
+                info = archive.gettarinfo(ROOT / relative, arcname=f"{NAME}-{VERSION}/{relative}")
+                info.uid = info.gid = info.mtime = 0
+                info.uname = info.gname = ""
+                info.mode = 0o644
+                with (ROOT / relative).open("rb") as source:
+                    archive.addfile(info, source)
 digest = hashlib.sha256(target.read_bytes()).hexdigest()
 arch = ROOT / "packaging/arch"
 arch.mkdir(parents=True, exist_ok=True)
